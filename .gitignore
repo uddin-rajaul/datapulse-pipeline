@@ -1,0 +1,12 @@
+.env
+*.pem
+__pycache__/
+*.pyc
+.pytest_cache/
+dbt/target/
+dbt/logs/
+.DS_Store
+great_expectations/uncommitted/
+.venv/
+*.egg-info/
+dist/
