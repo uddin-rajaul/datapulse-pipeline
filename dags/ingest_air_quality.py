@@ -153,19 +153,24 @@ def validate_bronze(**context):
     if not observed_at_values:
         raise ValueError("Could not resolve any observed_at values for GE query scope")
 
-    # Build a safe parameterized IN clause: (%s, %s, %s, ...)
-    # This is the correct way — never interpolate timestamps into SQL strings.
-    placeholders = ", ".join(["%s"] * len(observed_at_values))
+    # GE RuntimeBatchRequest requires a raw SQL string — it doesn't support
+    # psycopg2-style %s params. We build the IN clause by quoting each
+    # observed_at value as a SQL literal.
+    #
+    # Why is this safe here:
+    #   - observed_at values come from our own S3 records (we wrote them)
+    #   - They are ISO 8601 strings produced by datetime.isoformat()
+    #   - They contain no user input and no characters that could escape a
+    #     SQL string literal (no quotes, semicolons, or backslashes)
+    #
+    # If this ever changes (e.g. you accept user-supplied filters), switch to
+    # a query builder or a GE datasource that supports native params.
+    quoted = ", ".join(f"'{v}'" for v in observed_at_values)
     scoped_query = f"""
         SELECT *
         FROM bronze.air_quality_raw
-        WHERE observed_at IN ({placeholders})
-    """ % tuple(
-        f"'{v}'" for v in observed_at_values
-    )
-    # Note: GE RuntimeBatchRequest takes a raw SQL string (not psycopg2 params).
-    # We quote each value explicitly as ISO strings. observed_at values are
-    # strings like '2026-04-19T15:00:00+00:00' — safe to quote, no user input.
+        WHERE observed_at IN ({quoted})
+    """
 
     ge_root = os.path.join(os.path.dirname(__file__), "..", "great_expectations")
     data_context = DataContext(ge_root)
