@@ -72,6 +72,9 @@ services:
           --email admin@datapulse.local || true
       "
     restart: "no"
+    # Airflow 3.x renamed commands:
+    #   webserver  -> api-server
+    #   No separate webserver process; api-server serves both UI and REST API
 
   # Scheduler: picks up DAGs, schedules task instances, runs them locally.
   # With LocalExecutor, the scheduler also executes tasks directly.
@@ -86,7 +89,7 @@ services:
   # Webserver: the Airflow UI at http://localhost:8080
   airflow-webserver:
     <<: *airflow-common
-    command: webserver
+    command: api-server
     ports:
       - "8080:8080"
     restart: unless-stopped
