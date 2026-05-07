@@ -1,0 +1,62 @@
+{
+  "expectation_suite_name": "bronze_air_quality_raw",
+  "expectations": [
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": { "column": "pm2_5" },
+      "meta": { "notes": "Core metric. Null means the OpenWeather response was malformed or incomplete." }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "pm2_5",
+        "min_value": 0,
+        "max_value": 1000
+      },
+      "meta": {
+        "notes": "WHO hazardous ceiling is ~250 µg/m³. Kathmandu peaks around 300-400 in winter. 1000 is a data-sanity bound, not a health threshold. If we ever see >1000 it means sensor or API error."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": { "column": "observed_at" },
+      "meta": { "notes": "No timestamp means we cannot partition or deduplicate. This row is useless." }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": { "column": "city" },
+      "meta": { "notes": "City is the primary dimension for all KPIs." }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "city",
+        "value_set": ["kathmandu", "pokhara", "biratnagar", "dhangadhi"]
+      },
+      "meta": { "notes": "Guard against typos or new cities being accidentally added to CITIES dict without updating downstream models." }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "ow_aqi",
+        "min_value": 1,
+        "max_value": 5
+      },
+      "meta": { "notes": "OpenWeather's own AQI scale is 1-5 only. Values outside this range indicate a parsing bug." }
+    },
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 1,
+        "max_value": 8
+      },
+      "meta": {
+        "notes": "We validate the current run's observed_at timestamps (up to 2 hours). Expect 4 cities × 1-2 hours = 4-8 rows. Min of 1 (not 4) because partial city failures are logged but allowed by fetch_all_cities. If all 4 cities fail, fetch_and_store_s3 raises before we reach validation."
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.18.x",
+    "notes": "Validates the last 2 hours of bronze.air_quality_raw. The query scope is set in the validate_bronze Airflow task, not here."
+  }
+}

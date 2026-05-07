@@ -1,0 +1,16 @@
+name: bronze_checkpoint
+config_version: 1.0
+class_name: Checkpoint
+module_name: great_expectations.checkpoint
+
+action_list:
+  - name: store_validation_results
+    action:
+      class_name: StoreValidationResultsAction
+      target_store_name: validations_store
+
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction
+      site_names:
+        - local_site
