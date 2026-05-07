@@ -19,8 +19,6 @@ from airflow.operators.python import PythonOperator
 from include.openweather_client import fetch_all_cities
 from include.s3_client import write_all_to_s3
 
-from great_expectations.data_context import DataContext
-from great_expectations.core.batch import RuntimeBatchRequest
 
 
 log = logging.getLogger(__name__)
@@ -132,6 +130,10 @@ def validate_bronze(**context):
     Scope: rows matching the observed_at timestamps from this run only.
     Uses parameterized query — no f-string SQL interpolation.
     """
+    # Import here, not at module level — GE is slow to import and would
+    # cause Airflow's DAG parser to time out on every parse cycle.
+    from great_expectations.data_context import DataContext
+    from great_expectations.core.batch import RuntimeBatchRequest
     s3_keys = context["ti"].xcom_pull(task_ids="fetch_and_store_s3")
     if not s3_keys:
         raise ValueError("XCom returned no S3 keys — cannot scope GE validation")
