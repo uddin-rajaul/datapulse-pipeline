@@ -1,44 +1,17 @@
-
+# =============================================================================
 # datapulse-pipeline: Local Airflow development with Docker Compose
 #
-# Usage:
-#   make up          # start everything
-#   make down        # stop and remove containers
-#   make logs        # tail airflow-webserver logs
+# Uses `airflow standalone` — single process, minimal RAM.
+# Suitable for t3.micro (1GB RAM) and local dev.
 #
-# Airflow UI: http://localhost:8080 (admin / admin)
-
-x-airflow-common: &airflow-common
-  image: apache/airflow:3.0.1-python3.12
-  environment:
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
-    AIRFLOW__WEBSERVER__SECRET_KEY: "datapulse-local-dev-key-change-in-prod"
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
-    _PIP_ADDITIONAL_REQUIREMENTS: >-
-      boto3>=1.42
-      psycopg2-binary>=2.9
-      requests>=2.33
-      great-expectations>=1.16
-      python-dotenv>=1.2
-  env_file:
-    - .env
-  volumes:
-    - ./dags:/opt/airflow/dags
-    - ./include:/opt/airflow/include
-    - ./great_expectations:/opt/airflow/great_expectations
-    - airflow-logs:/opt/airflow/logs
-  depends_on:
-    airflow-db:
-      condition: service_healthy
-  networks:
-    - datapulse
+# Airflow UI: http://localhost:8080 (admin / auto-generated, see logs)
+# =============================================================================
 
 services:
 
+  # --------------------------------------------------------------------------
   # Airflow metadata database (local only — not your RDS)
+  # --------------------------------------------------------------------------
   airflow-db:
     image: postgres:15-alpine
     environment:
@@ -55,52 +28,40 @@ services:
     networks:
       - datapulse
 
-  # One-time DB init + admin user creation.
-  # Runs airflow db migrate, then creates the admin user if it doesn't exist.
-  # The `restart: no` means it exits after running — that's expected.
-  airflow-init:
-    <<: *airflow-common
-    command: >
-      bash -c "
-        airflow db migrate &&
-        airflow users create
-          --username admin
-          --password admin
-          --firstname Raj
-          --lastname Admin
-          --role Admin
-          --email admin@datapulse.local || true
-      "
-    restart: "no"
-    # Airflow 3.x renamed commands:
-    #   webserver  -> api-server
-    #   No separate webserver process; api-server serves both UI and REST API
-
-  # Scheduler: picks up DAGs, schedules task instances, runs them locally.
-  # With LocalExecutor, the scheduler also executes tasks directly.
-  airflow-scheduler:
-    <<: *airflow-common
-    command: scheduler
-    restart: unless-stopped
-    depends_on:
-      airflow-init:
-        condition: service_completed_successfully
-
-  # Webserver: the Airflow UI at http://localhost:8080
-  airflow-webserver:
-    <<: *airflow-common
-    command: api-server
+  # --------------------------------------------------------------------------
+  # Airflow standalone: runs scheduler + api-server in one process.
+  # Much lighter than separate containers — fits in 1GB RAM.
+  # `standalone` is Airflow 3's recommended single-machine mode.
+  # --------------------------------------------------------------------------
+  airflow:
+    image: apache/airflow:3.0.1-python3.12
+    command: standalone
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+      AIRFLOW__WEBSERVER__SECRET_KEY: "datapulse-local-dev-key-change-in-prod"
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        boto3>=1.42
+        psycopg2-binary>=2.9
+        requests>=2.33
+        great-expectations>=1.16
+        python-dotenv>=1.2
+    env_file:
+      - .env
     ports:
       - "8080:8080"
-    restart: unless-stopped
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./include:/opt/airflow/include
+      - ./great_expectations:/opt/airflow/great_expectations
+      - airflow-logs:/opt/airflow/logs
     depends_on:
-      airflow-init:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      airflow-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - datapulse
 
 volumes:
   airflow-db-data:
