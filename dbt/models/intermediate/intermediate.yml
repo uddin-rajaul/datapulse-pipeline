@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: int_air_quality
+    description: >
+      Cleaned and enriched air quality readings. Null PM2.5 and out-of-range
+      AQI values are excluded. Each row carries a human-readable AQI label
+      and a meteorological season label for Nepal.
+    columns:
+      - name: city
+        description: City name.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["kathmandu", "pokhara", "biratnagar", "dhangadhi"]
+
+      - name: observed_at
+        description: UTC timestamp of the measurement.
+        tests:
+          - not_null
+
+      - name: ow_aqi
+        description: OpenWeather AQI scale 1-5.
+        tests:
+          - not_null
+
+      - name: pm2_5
+        description: PM2.5 concentration in µg/m³.
+        tests:
+          - not_null
+
+      - name: aqi_label
+        description: Human-readable AQI level.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Good", "Fair", "Moderate", "Poor", "Very Poor"]
+
+      - name: season
+        description: >
+          Nepali meteorological season inferred from observed_at.
+          Winter (Dec-Feb), Pre-monsoon (Mar-May), Monsoon (Jun-Sep),
+          Post-monsoon (Oct-Nov).
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Winter", "Pre-monsoon", "Monsoon", "Post-monsoon"]
+
+    tests:
+      - unique:
+          column_name: "(city || '-' || observed_at)"

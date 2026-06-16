@@ -4,22 +4,12 @@ Hourly Pipeline: OpenWeather API -> S3 Bronze -> RDS bronze -> GE validation
 XCom carries only S3 keys (small strings) between tasks.
 Full record payloads are read from S3, never stored in XCom.
 """
-import json
 import logging
 import os
 from datetime import datetime, timedelta
 
-import boto3
-import psycopg2
-from psycopg2.extras import execute_values
-
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-
-from include.openweather_client import fetch_all_cities
-from include.s3_client import write_all_to_s3
-
-
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +43,9 @@ def fetch_and_store_s3(**context):
     Fetch air quality data for all cities, write each record to S3.
     Returns: list of S3 keys written (these go into XCom — small strings only).
     """
+    import json
+    from include.openweather_client import fetch_all_cities
+    from include.s3_client import write_all_to_s3
     api_key = os.environ["OPENWEATHER_API_KEY"]
     bucket = os.environ.get("S3_BUCKET", "datapulse-bronze")
 
@@ -68,8 +61,6 @@ def fetch_and_store_s3(**context):
 
     log.info("Written %d keys to s3://%s", len(s3_keys), bucket)
 
-    # XCom carries only S3 keys, not the full record payloads.
-    # This keeps XCom lightweight and makes load_bronze independently retryable.
     return s3_keys
 
 
@@ -78,6 +69,10 @@ def load_bronze(**context):
     Read each S3 key written by fetch_and_store_s3, then insert into RDS bronze.
     Reading from S3 (not XCom) means this task is safe to retry independently.
     """
+    import json
+    import boto3
+    import psycopg2
+    from psycopg2.extras import execute_values
     s3_keys = context["ti"].xcom_pull(task_ids="fetch_and_store_s3")
     if not s3_keys:
         raise ValueError("XCom returned no S3 keys — check fetch_and_store_s3 logs")
@@ -130,16 +125,14 @@ def validate_bronze(**context):
     Scope: rows matching the observed_at timestamps from this run only.
     Uses parameterized query — no f-string SQL interpolation.
     """
-    # Import here, not at module level — GE is slow to import and would
-    # cause Airflow's DAG parser to time out on every parse cycle.
+    import json
+    import boto3
     from great_expectations.data_context import DataContext
     from great_expectations.core.batch import RuntimeBatchRequest
     s3_keys = context["ti"].xcom_pull(task_ids="fetch_and_store_s3")
     if not s3_keys:
         raise ValueError("XCom returned no S3 keys — cannot scope GE validation")
 
-    # Re-read records from S3 to get observed_at values.
-    # Avoids storing record payloads in XCom.
     bucket = os.environ.get("S3_BUCKET", "datapulse-bronze")
     s3 = boto3.client("s3")
 
@@ -155,18 +148,6 @@ def validate_bronze(**context):
     if not observed_at_values:
         raise ValueError("Could not resolve any observed_at values for GE query scope")
 
-    # GE RuntimeBatchRequest requires a raw SQL string — it doesn't support
-    # psycopg2-style %s params. We build the IN clause by quoting each
-    # observed_at value as a SQL literal.
-    #
-    # Why is this safe here:
-    #   - observed_at values come from our own S3 records (we wrote them)
-    #   - They are ISO 8601 strings produced by datetime.isoformat()
-    #   - They contain no user input and no characters that could escape a
-    #     SQL string literal (no quotes, semicolons, or backslashes)
-    #
-    # If this ever changes (e.g. you accept user-supplied filters), switch to
-    # a query builder or a GE datasource that supports native params.
     quoted = ", ".join(f"'{v}'" for v in observed_at_values)
     scoped_query = f"""
         SELECT *

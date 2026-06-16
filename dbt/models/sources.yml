@@ -1,0 +1,61 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: bronze
+    description: >
+      Raw landing zone ingested by the Airflow `ingest_air_quality` DAG.
+      Airflow owns writes to this schema. dbt reads from it as a source.
+    tables:
+      - name: air_quality_raw
+        description: >
+          One row per city per hour. Data sourced from OpenWeatherMap
+          Air Pollution API. Duplicates are possible on re-runs; the
+          staging model handles deduplication.
+        columns:
+          - name: id
+            description: Surrogate primary key, BIGSERIAL.
+          - name: city
+            description: City name, matching the CITIES dict in the ingestion code.
+          - name: lat
+            description: Latitude of the measurement station.
+          - name: lon
+            description: Longitude of the measurement station.
+          - name: observed_at
+            description: UTC timestamp when OpenWeather recorded the measurement.
+          - name: ingested_at
+            description: UTC timestamp when the pipeline wrote this row.
+          - name: ow_aqi
+            description: >
+              OpenWeather AQI scale. 1=Good, 2=Fair, 3=Moderate, 4=Poor,
+              5=Very Poor.
+          - name: pm2_5
+            description: PM2.5 concentration in µg/m³.
+          - name: pm10
+            description: PM10 concentration in µg/m³.
+          - name: co
+            description: Carbon monoxide concentration in µg/m³.
+          - name: no
+            description: Nitrogen monoxide concentration in µg/m³.
+          - name: no2
+            description: Nitrogen dioxide concentration in µg/m³.
+          - name: o3
+            description: Ozone concentration in µg/m³.
+          - name: so2
+            description: Sulfur dioxide concentration in µg/m³.
+          - name: nh3
+            description: Ammonia concentration in µg/m³.
+
+        freshness:
+          warn_after: { count: 3, period: hour }
+          error_after: { count: 6, period: hour }
+
+        loaded_at_field: ingested_at
+
+        tests:
+          - unique:
+              column_name: "(city || '-' || observed_at)"
+          - not_null:
+              column_name: city
+          - not_null:
+              column_name: observed_at

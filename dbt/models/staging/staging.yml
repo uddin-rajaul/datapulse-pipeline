@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_air_quality
+    description: >
+      Clean, deduplicated view over the raw bronze.air_quality_raw source.
+      Deduplication picks the most recently ingested row per (city, observed_at)
+      combination. All columns are explicitly cast to match the target types.
+
+    columns:
+      - name: city
+        description: City name.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["kathmandu", "pokhara", "biratnagar", "dhangadhi"]
+
+      - name: observed_at
+        description: UTC timestamp of the measurement.
+        tests:
+          - not_null
+
+      - name: ow_aqi
+        description: OpenWeather AQI scale 1-5.
+
+      - name: pm2_5
+        description: PM2.5 concentration in µg/m³.
+        tests:
+          - not_null
+
+    tests:
+      - unique:
+          column_name: "(city || '-' || observed_at)"
+          severity: warn

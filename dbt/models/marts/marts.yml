@@ -1,0 +1,102 @@
+version: 2
+
+models:
+  - name: daily_city_avg
+    description: >
+      Daily aggregate statistics per city. One row per city per UTC day.
+      Powers the time-series charts and daily summaries in the Streamlit
+      dashboard.
+
+    columns:
+      - name: city
+        description: City name.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["kathmandu", "pokhara", "biratnagar", "dhangadhi"]
+
+      - name: observed_date
+        description: UTC date of the measurement window.
+        tests:
+          - not_null
+
+      - name: reading_count
+        description: Number of hourly readings contributing to this daily aggregate.
+        tests:
+          - not_null
+
+      - name: avg_pm25
+        description: Daily mean PM2.5 concentration in µg/m³.
+
+      - name: avg_aqi
+        description: Daily mean OpenWeather AQI (1-5 scale).
+
+      - name: unhealthy_reading_count
+        description: Number of hourly readings in this day with AQI >= 4 (Poor or Very Poor).
+
+    tests:
+      - unique:
+          column_name: "(city || '-' || observed_date)"
+
+  - name: aqi_distribution
+    description: >
+      Count of hourly readings per AQI level per city per day.
+      Enables stacked bar charts showing how many hours each city
+      spends at each AQI level.
+
+    columns:
+      - name: city
+        description: City name.
+        tests:
+          - not_null
+
+      - name: observed_date
+        description: UTC date.
+
+      - name: aqi_label
+        description: Human-readable AQI level (Good, Fair, Moderate, Poor, Very Poor).
+        tests:
+          - not_null
+
+      - name: reading_count
+        description: Number of hourly readings at this AQI level.
+
+    tests:
+      - unique:
+          column_name: "(city || '-' || observed_date || '-' || aqi_label)"
+
+  - name: city_comparison
+    description: >
+      City-level daily aggregates with rolling averages and WHO guideline
+      comparisons. Includes both the daily (45 µg/m³) and annual (15 µg/m³)
+      WHO PM2.5 thresholds as reference columns.
+
+    columns:
+      - name: city
+        description: City name.
+        tests:
+          - not_null
+
+      - name: observed_date
+        description: UTC date.
+
+      - name: avg_pm25
+        description: Daily mean PM2.5 in µg/m³.
+
+      - name: exceeds_daily_who
+        description: True if daily mean PM2.5 exceeds the WHO 24-hour guideline of 45 µg/m³.
+        tests:
+          - not_null
+
+      - name: who_daily_threshold_ug_m3
+        description: WHO 2021 daily guideline for PM2.5 (45 µg/m³).
+
+      - name: who_annual_threshold_ug_m3
+        description: WHO 2021 annual guideline for PM2.5 (15 µg/m³).
+
+      - name: rolling_7day_avg_pm25
+        description: 7-day trailing average of daily mean PM2.5.
+
+    tests:
+      - unique:
+          column_name: "(city || '-' || observed_date)"

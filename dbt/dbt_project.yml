@@ -1,0 +1,32 @@
+name: datapulse
+version: "1.0.0"
+config-version: 2
+
+profile: datapulse
+
+model-paths: [models]
+test-paths: [tests]
+macro-paths: [macros]
+seed-paths: [seeds]
+
+clean-targets:
+  - target
+  - dbt_packages
+
+vars:
+  who_daily_pm25_threshold: 45
+  who_annual_pm25_threshold: 15
+
+models:
+  datapulse:
+    staging:
+      +materialized: view
+      +schema: silver
+    intermediate:
+      +materialized: incremental
+      +schema: silver
+      +unique_key: ["city", "observed_at"]
+      +on_schema_change: append_new_columns
+    marts:
+      +materialized: table
+      +schema: gold

@@ -1,0 +1,14 @@
+datapulse:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      threads: 2
+      host: "{{ env_var('RDS_HOST') }}"
+      port: "{{ env_var('RDS_PORT', '5432') | int }}"
+      dbname: "{{ env_var('RDS_DB') }}"
+      schema: public
+      user: "{{ env_var('RDS_WRITER_USER') }}"
+      password: "{{ env_var('RDS_WRITER_PASSWORD') }}"
+      keepalives_idle: 0
+      connect_timeout: 10

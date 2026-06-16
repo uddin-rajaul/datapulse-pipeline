@@ -7,6 +7,9 @@ dbt/target/
 dbt/logs/
 .DS_Store
 great_expectations/uncommitted/
+dbt/profiles.yml
+dbt/packages/
+dbt/dbt_packages/
 .venv/
 *.egg-info/
 dist/
